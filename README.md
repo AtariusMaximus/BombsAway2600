@@ -1,10 +1,9 @@
-# BombsAway2600
+# Bombs Away! for the Atari 2600
 This is the code repository for the Atari 2600 game Bombs Away.
 
 Development Thread:  https://forums.atariage.com/topic/159011-bombs-away/#comment-1954419
 
-<img>
-<img src="https://github.com/AtariusMaximus/BombsAway2600/blob/main/bombs_away_screenshot2.jpg"><img src="https://github.com/AtariusMaximus/BombsAway2600/blob/main/bombs_away_screenshot3.jpg">
+<img><img src="https://github.com/AtariusMaximus/BombsAway2600/blob/main/bombs_away_screenshot2.jpg"><img src="https://github.com/AtariusMaximus/BombsAway2600/blob/main/bombs_away_screenshot3.jpg">
 
 Bombs Away is a fast paced action game inspired by Activision's Kaboom.  It was originally released in 2010.
 
