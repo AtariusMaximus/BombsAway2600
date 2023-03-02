@@ -1,0 +1,3106 @@
+ rem  -----------
+ rem  Bombs Away!
+ rem  -----------
+ rem
+ rem  by Steve Engelhardt
+ rem  v0.45 3/12/2010
+ rem   for batariBASIC v1.1
+
+ rem smartbranching on
+ set kernel_options pfheights pfcolors
+ set romsize 16k
+ include fixed_point_math.asm
+
+ h=0	: rem 4.4 var for speed variance
+ 
+ dim speed=h.h
+
+init
+
+ pfheights:
+ 8
+ 70
+ 1
+ 1
+ 1
+ 1
+ 1
+ 1
+ 1
+ 1
+ 1
+end
+
+ pfcolors:
+ 2
+ 64
+ 208
+ 210
+ 212
+ 214
+ 216
+ 218
+ 220
+ 222
+ 50
+end
+
+ l=18
+
+ gosub titlescreen bank2
+
+ rem ----------------
+ rem game begin
+ rem ----------------
+
+begin
+
+ rem ------------------------------
+ rem set initial playfield
+
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ rem ------------------------------
+ rem set initial score to zero
+ score=000000
+
+ rem ------------------------------
+ rem variable assignments
+
+ rem j          counter in titlescreen for player1 animation
+ rem l		counter in titlescreen for dropping bombs
+
+ a=80  		: rem ball x pos
+ b=87  		: rem ball y pos
+ c=130		: rem missile 0 x pos
+ d=0  		: rem 
+ e=40 		: rem missile 1 x pos
+ f=0 		: rem used for audio sounds
+ rem g=0	: rem  Save state of skill level from options screen
+ rem h=0	: rem speed variable - dont clear here - it's set on options screen
+ i=0		: rem shields on/off
+ j=0		: rem counter for sprite animation
+
+ rem k		: rem Bit Variable
+ rem k{1}	: rem l/r movement for shield
+ rem k{2}	: rem l/r movement for shield
+
+ rem l=0	: rem Skill level selection from options screen
+ m=3     	: rem counter in death sequence, counter for smart bombs.
+ n=0		: rem counter to slow down falling bombs
+ o=10		: rem color change for bombs, changes each level
+ p=0		: rem counter for slowing down bomb speed
+ q=0		: rem pause timer for hitting the joystick button between levels, about 1.5 seconds.
+ r=0		: rem level selection on options screen
+ rem s=0	: rem  Save state of level start number from options screen
+ t=0		: rem shield speed
+ u=0		: rem "lose a life" counter.  Incremented when a bomb hits the city.
+ v=100  	: rem player 1 x pos
+ w=3  		: rem player 1 y pos
+ x=35  		: rem player 0 x pos
+ y=13  		: rem player 0 y pos
+ z=0		: rem speed of laser movement
+
+ rem ------------------------------
+ rem set up life counter
+
+ const pfscore=1
+ pfscorecolor=20
+ pfscore1=168
+ pfscore2=168
+
+ rem ------------------------------
+ rem   Set Background color 
+ rem
+ COLUBK=00
+ rem
+ rem set ball to 4 pixels wide
+ rem 
+ CTRLPF=$21
+
+ goto options bank4
+
+gamestartreset
+ t=0:missile0height=2:missile1height=2:s=r:g=d:u=0:o=20
+ pfscorecolor=20
+ pfscore1=168
+ pfscore2=168
+ v=100  	: rem player 1 x pos
+ w=3  		: rem player 1 y pos
+ x=35  		: rem player 0 x pos
+ y=13  		: rem player 0 y pos
+ ballheight=68
+ a=80  		: rem ball x pos
+ b=87  		: rem ball y pos
+ 
+ 
+gamestart
+
+ if !joy0fire then ballx=0:bally=0
+
+ drawscreen
+
+ f=f+1
+ if f<20 then f=20
+ if f>69 then f=1
+
+ rem ------------------------------
+ rem score color set to yellow
+ scorecolor=28
+
+ rem ------------------------------
+ rem bomb colors vary depending on the level you're on.
+ rem
+ rem   Set Player 0 Color 
+ rem
+ COLUP0=o
+ rem
+ rem   Set Player 1 Color 
+ rem
+ COLUP1=o+4
+
+ rem laser shot sound
+ if joy0fire then AUDF1=f:AUDC1=12:AUDV1=4 else AUDV1=0
+
+ rem bomb is falling sound
+ AUDF0=y:AUDC0=14:AUDV0=8
+
+ rem sound when a bomb hits the city
+ if y>68 then AUDF0=31:AUDC0=f:AUDV0=12
+ if w>68 then AUDF0=31:AUDC0=f:AUDV0=12
+ if collision(player0,missile0) || collision(player1,missile1) then AUDF0=31:AUDC0=f:AUDV0=12 
+ if collision(player1,missile0) || collision(player0,missile1) then AUDF0=31:AUDC0=f:AUDV0=12 
+
+ rem sound when a laser destroys a bomb
+ if collision(player0,playfield) || collision(player1,playfield) then AUDF1=31:AUDC1=f:AUDV0=15 
+ if collision(player1,playfield) || collision(player0,playfield) then AUDF1=31:AUDC1=f:AUDV0=15 
+
+ if switchreset then reboot
+
+ NUSIZ0=$30
+ NUSIZ1=$30
+
+ if k{4} then ballheight=f else ballheight=68
+ 
+ rem ------------------------------
+ rem move ball at the bottom of the screen
+
+ if joy0left then a=a-3-z
+ if joy0right then a=a+3+z
+
+ rem ------------------------------
+ rem   Set Boundaries for l/r movement of laser
+ rem 
+ rem   set outside boundaries for Player1 Left/Right movement 
+ rem 
+ if a<17 then a=a+3+z
+ if a>144 then a=a-3-z
+
+ rem ------------------------------
+ rem set locations of bombs and shields
+ rem
+
+ player0x=x
+ player0y=y
+
+ player1x=v
+ player1y=w
+
+ ballx=a
+ bally=b
+
+ if i=0 then goto skipmis
+ missile0x=c
+ missile0y=39
+
+ missile1x=e
+ missile1y=69
+skipmis
+
+ rem -----------------------------
+ rem right joystick moves city shields
+ if joy1right then c=c+4:e=e-4
+ if joy1left then c=c-4:e=e+4
+ 
+ if joy1right && c>140 then c=c-4
+ if joy1left && c<20 then c=c+4
+
+ if joy1right && e<10 then e=e+4
+ if joy1left && e>140 then e=e-4
+ 
+ rem ------------------------------
+ rem move shields back and forth
+ rem if shield option is turned off, skip this section
+
+ if i=0 then goto skipmis2
+
+ if e>140 then k{1}=1
+ if e<20 then k{1}=0
+
+ if k{1} then e=e-1-t
+ if !k{1} then e=e+1+t 
+
+ if c>140 then k{2}=1
+ if c<20 then k{2}=0
+
+ if k{2} then c=c-1-t
+ if !k{2} then c=c+1+t 
+skipmis2
+
+ rem -----------------------------
+ rem  gradually increase speed of falling bombs,
+ rem 
+ rem n slows down the fall of the bombs.
+ rem p is incremented by one whenever a bomb is destroyed by the laser.
+ rem   hence, destroying a bomb brings you closer to the increased speed.
+ rem the 'z' variable increases the speed of the left/right movement of the laser.
+ rem the 't' variable increases the speed of the city shields
+
+ if p>240 then p=240
+ n=n+1
+
+ on l goto bombspeed1 bombspeed2 bombspeed3 bombspeed3
+bombret
+
+ rem ---------------------
+ rem check and see if you've reached the end of a level
+
+ if p=0 then gosub levelup0 bank3
+ if p=20 then gosub levelup1 bank3: gosub bombdefuse bank2
+ if p=40 then gosub levelup2 bank3
+ if p=60 then gosub levelup3 bank3: gosub bombdefuse bank2
+ if p=80 then gosub levelup4 bank3
+ if p=100 then gosub levelup5 bank3: gosub bombdefuse bank2
+ if p=120 then gosub levelup6 bank3
+ if p=140 then gosub levelup7 bank3: gosub bombdefuse bank2
+ if p=160 then gosub levelup8 bank3
+ if p=180 then gosub levelup9 bank3: gosub bombdefuse bank2
+ if p=200 then gosub levelup10 bank3
+ if p=239 then gosub levelup12 bank2: gosub bombdefuse bank2
+
+skipit
+
+ rem ------------------------------
+ rem if a bomb hits a shield, it's removed and reset to the top, does not increase your score.
+
+ if collision(player0,missile0) || collision(player0,missile1) then y=0
+ if collision(player1,missile0) || collision(player1,missile1) then w=0
+ 
+ rem ------------------------------
+ rem if a bomb hits the ball(laser), it's cleared and your score increases
+
+ if collision(player0,ball) && y<35 then score=score+20: goto p0clear 
+ if collision(player1,ball) && w<35 then score=score+20: goto p1clear 
+
+ if collision(player0,ball) && y>24 && y<41 then score=score+30: goto p0clear 
+ if collision(player1,ball) && w>24 && w<41 then score=score+30: goto p1clear 
+
+ if collision(player0,ball) && y>40 && y<63 then score=score+20: goto p0clear 
+ if collision(player1,ball) && w>40 && w<63 then score=score+20: goto p1clear 
+
+ if collision(player0,ball) && y>62 then score=score+10: goto p0clear 
+ if collision(player1,ball) && w>62 then score=score+10: goto p1clear 
+
+ rem ------------------------------
+ rem if a bomb hits the city, you lose a life - end game after six bombs hit the city
+ 
+ if y>78 then u=u+1:goto p0clear
+ if w>78 then u=u+1:goto p1clear
+
+ rem ------------------------------
+ rem change life counter
+
+ if u=0 then pfscore1=168:pfscore2=168			: rem 3 3
+ if u=1 then pfscore1=10:pfscore2=168 			: rem 2 3
+ if u=2 then pfscore1=4:pfscore2=168  			: rem 1 3
+ if u=3 then pfscore1=0:pfscore2=168  			: rem 0 3
+ if u=4 then pfscore1=0:pfscore2=10   			: rem 0 2
+ if u=5 then pfscore1=0:pfscore2=4   			: rem 0 1
+ if u>5 then pfscore1=0:pfscore2=0:goto death bank3     : rem 0 0
+
+ rem -------------------------
+ rem bomb animation
+
+ j=j+1
+ if j>30 then j=0
+
+ if j=30 then player1:
+  %00011000
+  %00101100
+  %00101100
+  %01011110
+  %01011110
+  %00101100
+  %00111100
+  %00011000
+  %00011000
+  %00101100
+end
+
+ if j=20 then player1:
+  %00011000
+  %00100100
+  %00100100
+  %01100110
+  %01111110
+  %00100100
+  %00111100
+  %00011000
+  %00011000
+  %01100110
+end
+
+ if j=10 then player1:
+  %00011000
+  %00110100
+  %00110100
+  %01111010
+  %01111010
+  %00110100
+  %00111100
+  %00011000
+  %00011000
+  %00110100
+end
+
+ if j=30 then player0:
+  %00011000
+  %00101100
+  %00101100
+  %01011110
+  %01011110
+  %00101100
+  %00111100
+  %00011000
+  %00011000
+  %00101100
+end
+
+ if j=20 then player0:
+  %00011000
+  %00100100
+  %00100100
+  %01100110
+  %01111110
+  %00100100
+  %00111100
+  %00011000
+  %00011000
+  %01100110
+end
+
+ if j=10 then player0:
+  %00011000
+  %00110100
+  %00110100
+  %01111010
+  %01111010
+  %00110100
+  %00111100
+  %00011000
+  %00011000
+  %00110100
+end
+
+ if joy1fire then gosub bombdefuse bank2
+
+ goto gamestart
+
+ rem -----------------------v
+p1clear
+
+ v = (rand&83)
+ if v > 80 then v = 75
+ if v < 30 then v = v + 40
+
+ w=0
+
+ rem level counter will be randomly increased
+ if p<240 && v>68 then p=p+1
+
+ goto gamestart 
+
+ rem -----------------------x
+p0clear
+
+   x = (rand&121)
+   if x > 120 then x = x - 30
+   if x < 82 then x = x + 50
+
+ rem level counter will be randomly increased
+ if p<240 && x>100 then p=p+1
+
+ y=0
+ goto gamestart 
+
+ rem -----------------------
+ rem difficulty levels
+
+ rem -------------------
+ rem easy difficulty
+
+bombspeed1
+ if p>0 && p<20 && n>5 then speed=0.1:w=w+speed:y=y+speed:n=0
+ if p>19 && p<40 && n>5 then speed=0.1:w=w+speed:y=y+speed:n=0
+ if p>39 && p<60 && n>5 then speed=0.1:w=w+speed:y=y+speed:n=0
+ if p>59 && p<80 && n>5 then speed=0.2:w=w+speed:y=y+speed:n=0
+ if p>79 && p<100 && n>5 then speed=0.2:w=w+speed:y=y+speed:n=0
+ if p>99 && p<120 && n>5 then speed=0.2:w=w+speed:y=y+speed:n=0
+ if p>119 && p<140 && n>5 then speed=0.3:w=w+speed:y=y+speed:n=0
+ if p>139 && p<160 && n>5 then speed=0.3:w=w+speed:y=y+speed:n=0:z=1
+ if p>159 && p<180 && n>5 then speed=0.3:w=w+speed:y=y+speed:n=0:z=1
+ if p>179 && p<200 && n>5 then speed=0.4:w=w+speed:y=y+speed:n=0:z=2:t=1 
+ if p>199 && p<220 && n>5 then speed=0.4:w=w+speed:y=y+speed:n=0:z=2:t=1
+ if p>219 && p<240 && n>5 then speed=0.5:w=w+speed:y=y+speed:n=0:z=2:t=1
+ if p>239 && n>5 then speed=0.6:w=w+speed:y=y+speed:n=0:z=2:t=2
+
+ goto bombret
+
+ rem -------------------
+ rem average difficulty
+
+bombspeed2
+ if p>0 && p<20 && n>5 then speed=0.1:w=w+speed:y=y+speed:n=0
+ if p>19 && p<40 && n>5 then speed=0.1:w=w+speed:y=y+speed:n=0
+ if p>39 && p<60 && n>5 then speed=0.2:w=w+speed:y=y+speed:n=0
+ if p>59 && p<80 && n>5 then speed=0.2:w=w+speed:y=y+speed:n=0
+ if p>79 && p<100 && n>5 then speed=0.3:w=w+speed:y=y+speed:n=0
+ if p>99 && p<120 && n>5 then speed=0.3:w=w+speed:y=y+speed:n=0
+ if p>119 && p<140 && n>5 then speed=0.3:w=w+speed:y=y+speed:n=0
+ if p>139 && p<160 && n>5 then speed=0.4:w=w+speed:y=y+speed:n=0:z=1
+ if p>159 && p<180 && n>5 then speed=0.4:w=w+speed:y=y+speed:n=0:z=1
+ if p>179 && p<200 && n>5 then speed=0.5:w=w+speed:y=y+speed:n=0:z=2:t=1 
+ if p>199 && p<220 && n>5 then speed=0.5:w=w+speed:y=y+speed:n=0:z=2:t=1
+ if p>219 && p<240 && n>5 then speed=0.6:w=w+speed:y=y+speed:n=0:z=2:t=1
+ if p>239 && n>5 then speed=0.7:w=w+speed:y=y+speed:n=0:z=3:t=2
+
+ goto bombret
+
+ rem -------------------
+ rem hard difficulty
+
+bombspeed3
+ if p>0 && p<20 && n>5 then speed=0.2:w=w+speed:y=y+speed:n=0
+ if p>19 && p<40 && n>5 then speed=0.2:w=w+speed:y=y+speed:n=0
+ if p>39 && p<60 && n>5 then speed=0.3:w=w+speed:y=y+speed:n=0
+ if p>59 && p<80 && n>5 then speed=0.3:w=w+speed:y=y+speed:n=0
+ if p>79 && p<100 && n>5 then speed=0.4:w=w+speed:y=y+speed:n=0
+ if p>99 && p<120 && n>5 then speed=0.4:w=w+speed:y=y+speed:n=0
+ if p>119 && p<140 && n>5 then speed=0.5:w=w+speed:y=y+speed:n=0
+ if p>139 && p<160 && n>5 then speed=0.5:w=w+speed:y=y+speed:n=0:z=1
+ if p>159 && p<180 && n>5 then speed=0.6:w=w+speed:y=y+speed:n=0:z=1
+ if p>179 && p<200 && n>5 then speed=0.6:w=w+speed:y=y+speed:n=0:z=2:t=1 
+ if p>199 && p<220 && n>5 then speed=0.7:w=w+speed:y=y+speed:n=0:z=2:t=1
+ if p>219 && p<240 && n>5 then speed=0.7:w=w+speed:y=y+speed:n=0:z=3:t=1
+ if p>239 && n>4 then speed=0.8:w=w+speed:y=y+speed:n=0:z=4:t=2
+
+ goto bombret
+
+ bank 2
+
+
+bombdefuse
+
+  player0:
+  %00000000
+end
+  player1:
+  %00000000
+end
+
+  t=0
+  z=0
+
+  missile1x=0:missile1y=0
+  missile0height=1
+
+bombdefuse2
+
+   a=76   :rem player1x location
+   b=76   :rem player1y location
+   rem ----------------------------------------------------------------------------
+   c{1}=0 :rem Turned on if the last location of the joystick was UP
+   c{2}=0 :rem Turned on if the last location of the joystick was DOWN
+   c{3}=0 :rem Turned on if the last location of the joystick was LEFT
+   c{4}=1 :rem Turned on if the last location of the joystick was RIGHT
+   c{5}=0 :rem Turned on if the last location of the joystick was UP+LEFT
+   c{6}=0 :rem Turned on if the last location of the joystick was UP+RIGHT
+   c{7}=0 :rem Turned on if the last location of the joystick was DOWN+LEFT
+   c{0}=0 :rem Turned on if the last location of the joystick was DOWN+RIGHT
+   rem ----------------------------------------------------------------------------
+   e=20   :rem Counter for limiting travel of fired missile
+   w=0    :rem Used to determine player reflection (REFP1) 
+   j=30
+   o=20
+   m=138
+   rem ----------------------------------------------------------------------------
+
+   playfield:
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ X..............................X
+ XXXXXXXXXXXX........XXXXXXXXXXXX
+ XXXXXXXXXXXX........XXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ ................................
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ ballheight=4
+ CTRLPF=$21
+ COLUP0=2
+ AUDV0=0:AUDV1=0
+ missile1height=46
+
+start
+
+ if m<23 then k{2}=1
+ if m>140 then k{2}=0
+
+ if k{2} then m=m+1
+ if !k{2} then m=m-1
+
+ if k{2} && p>199 then m=m+1
+ if !k{2} && p>199 then m=m-1
+
+ missile1x=m:missile1y=66
+
+ scorecolor=28
+
+ f=f+1
+ if f>250 then f=1
+
+ q=q+1
+ if q>12 then q=1
+
+ if q=3 then player0:
+ %00111000
+ %01111100
+ %11111110
+ %11111110
+ %01111100
+ %00111000
+ %00010000
+ %00100000
+ %00100000
+ %00010000
+ %00111000
+ %00000000
+end
+
+ if q=6 then player0:player0:
+ %00111000
+ %01111100
+ %11111110
+ %11111110
+ %01111100
+ %00111000
+ %00010000
+ %00100000
+ %00100000
+ %00010000
+ %00111000
+ %01010100
+end
+
+ if q=9 then player0:player0:
+ %00111000
+ %01111100
+ %11111110
+ %11111110
+ %01111100
+ %00111000
+ %00010000
+ %00100000
+ %00100000
+ %01010100
+ %00111000
+ %01010100
+end
+
+ if q=12 then player0:player0:
+ %00111000
+ %01111100
+ %11111110
+ %11111110
+ %01111100
+ %00111000
+ %00010001
+ %00100000
+ %10100010
+ %01010100
+ %00111000
+ %01010100
+ %10000010
+ %00010000
+end
+
+   rem ---------------------------------------------------------------------------------
+   rem This section sets a value for the last direction the joystick was pushed
+   rem ---------------------------------------------------------------------------------
+
+   if joy0up then                c{1}=1:c{2}=0:c{3}=0:c{4}=0:c{5}=0:c{6}=0:c{7}=0:c{0}=0
+   if joy0down then              c{1}=0:c{2}=1:c{3}=0:c{4}=0:c{5}=0:c{6}=0:c{7}=0:c{0}=0
+   if joy0left then              c{1}=0:c{2}=0:c{3}=1:c{4}=0:c{5}=0:c{6}=0:c{7}=0:c{0}=0
+   if joy0right then             c{1}=0:c{2}=0:c{3}=0:c{4}=1:c{5}=0:c{6}=0:c{7}=0:c{0}=0
+   if joy0up && joy0left then    c{1}=0:c{2}=0:c{3}=0:c{4}=0:c{5}=1:c{6}=0:c{7}=0:c{0}=0
+   if joy0up && joy0right then   c{1}=0:c{2}=0:c{3}=0:c{4}=0:c{5}=0:c{6}=1:c{7}=0:c{0}=0
+   if joy0down && joy0left then  c{1}=0:c{2}=0:c{3}=0:c{4}=0:c{5}=0:c{6}=0:c{7}=1:c{0}=0
+   if joy0down && joy0right then c{1}=0:c{2}=0:c{3}=0:c{4}=0:c{5}=0:c{6}=0:c{7}=0:c{0}=1
+
+   rem ------------------------------------------------------------------
+   rem  Set color of player sprites and missiles
+   rem ------------------------------------------------------------------
+   COLUP1=28
+   COLUP0=2
+
+   player0x=j:player0y=o
+
+   rem ------------------------------------------------------------------
+   rem  Increase 20 to a larger number to make the bullets travel farther
+   rem ------------------------------------------------------------------
+   e=e+1
+   if e>20 then e=0
+
+   rem ------------------------------------------------------------------
+   rem  Set initial location of player sprite
+   rem ------------------------------------------------------------------
+   ballx=a:bally=b
+
+   rem ------------------------------------------------------------------
+   rem  Player Movement
+   rem ------------------------------------------------------------------
+   if joy0up then b=b-1
+   if joy0down then b=b+1
+   if joy0left then a=a-1
+   if joy0right then a=a+1
+
+   if a>137 then a=a-1
+   if a<23 then a=a+1
+   if b<12 then b=b+1
+   if b>76 then b=b-1
+
+   rem ------------------------------------------------------------------
+   rem  if you let go of the fire button, the missile shot is turned off,
+   rem  and the gunshot travel length variable (e) is reset to 0.
+   rem ------------------------------------------------------------------
+   if !joy0fire then missile0x=0:missile0y=0:e=0
+
+   rem ------------------------------------------------------------------
+   rem  Fire the Missile
+   rem    This code is what actually fires the missile.
+   rem  
+   rem  It checks for a combination of pressing the fire button and
+   rem    the direction the joystick was most recently moved in to
+   rem    determine which direction to fire the missile.
+   rem
+   rem  the E variable determines the length of the shot
+   rem ------------------------------------------------------------------
+
+   rem diagonal shots
+   if joy0fire && c{0} then missile0x=ballx+7+e:missile0y=bally+2+e
+   if joy0fire && c{5} then missile0x=ballx-3-e:missile0y=bally-7-e
+   if joy0fire && c{7} then missile0x=ballx-e:missile0y=bally+1+e
+   if joy0fire && c{6} then missile0x=ballx+7+e:missile0y=bally-7-e
+
+   rem left and right shots
+   if joy0fire && c{3} then missile0x=ballx-e:missile0y=bally-1
+   if joy0fire && c{4} then missile0x=ballx+8+e:missile0y=bally-1
+
+   rem up and down shots
+   if joy0fire && c{1} then missile0x=ballx+1:missile0y=bally-e
+   if joy0fire && c{2} then missile0x=ballx+1:missile0y=bally+e
+
+   rem ------------------------------------------------------------------
+   rem Player Animation
+   rem   Y is the counter for the player animation.  You can change the
+   rem   animation rate by changing the 30,20,10 to a different 
+   rem   sequence of numbers.
+   rem ------------------------------------------------------------------
+
+   rem ------------------------------------------------------------------
+   rem This will make the player face left when moving left.
+   rem ------------------------------------------------------------------
+   if !joy0left && !joy0right then skipref
+   if joy0left then w=8:REFP1=8
+   if joy0right then w=0:REFP1=0
+skipref
+
+   if collision(missile1,ball) then a=76:b=76
+   if collision(missile0,player0) then missile0x=0:missile0y=0:COLUP0=64:k{7}=0:z=0:f=1:gosub randomize:gosub checklives:score=score+10:goto explode1
+   if z=140 then f=1:z=1:k{7}=0:gosub randomize:goto reducelife
+reduceret
+
+   rem laser shot sound
+   if joy0fire then AUDF0=12:AUDC0=f:AUDV0=6 else AUDV0=0
+ 
+   if f>100 then k{7}=1
+   if k{7} then COLUP0=f:z=z+1
+   if !k{7} then COLUP0=66
+   if z=141 then z=1
+
+   pfscorecolor=20
+ 
+   if t>8 then goto clear1
+ 
+   drawscreen
+
+   if switchreset then reboot
+
+ goto start 
+
+reducelife
+   u=u+1
+   if u=0 then pfscore1=168:pfscore2=168			: rem 3 3
+   if u=1 then pfscore1=10:pfscore2=168 			: rem 2 3
+   if u=2 then pfscore1=4:pfscore2=168  			: rem 1 3
+   if u=3 then pfscore1=0:pfscore2=168  			: rem 0 3
+   if u=4 then pfscore1=0:pfscore2=10   			: rem 0 2
+   if u=5 then pfscore1=0:pfscore2=4   			        : rem 0 1
+   if u>5 then pfscore1=0:pfscore2=0:pop:goto death bank3       : rem 0 0
+
+explode1
+
+   if switchreset then reboot
+
+   k{5}=1
+
+   if m<23 then k{2}=1
+   if m>140 then k{2}=0
+
+   if k{2} then m=m+1
+   if !k{2} then m=m-1
+
+   if k{2} && p>199 then m=m+1
+   if !k{2} && p>199 then m=m-1
+
+   missile1x=m:missile1y=66
+
+   if collision(missile1,ball) then a=76:b=76
+   ballx=a:bally=b
+   if joy0up then b=b-1
+   if joy0down then b=b+1
+   if joy0left then a=a-1
+   if joy0right then a=a+1
+
+   if a>137 then a=a-1
+   if a<23 then a=a+1
+   if b<12 then b=b+1
+   if b>76 then b=b-1
+
+   if u=0 then pfscore1=168:pfscore2=168			: rem 3 3
+   if u=1 then pfscore1=10:pfscore2=168 			: rem 2 3
+   if u=2 then pfscore1=4:pfscore2=168  			: rem 1 3
+   if u=3 then pfscore1=0:pfscore2=168  			: rem 0 3
+   if u=4 then pfscore1=0:pfscore2=10   			: rem 0 2
+   if u=5 then pfscore1=0:pfscore2=4                            : rem 0 0
+   if u>5 then pfscore1=0:pfscore2=0:pop:goto death bank3 
+
+   AUDF0=31:AUDC0=8:AUDV0=9
+   f=f+1
+   drawscreen
+
+   if f>40 then f=1:k{5}=0:goto reduceret
+
+ if f=5 then player0:
+ %00000000
+ %00000000
+ %00000000
+ %00000000
+ %00000000
+ %00000000
+ %00000000
+ %00000000
+end
+
+ if f=10 then player0:
+ %00000000
+ %00000000
+ %00010000
+ %00111000
+ %00111000
+ %00010000
+ %00000000
+ %00000000
+end
+
+ if f=15 then player0:
+ %00000000
+ %00010000
+ %01000100
+ %00001000
+ %10100000
+ %01000100
+ %00010000
+ %00000000
+end
+
+ if f=20 then player0:
+ %00001000
+ %01000000
+ %00000001
+ %00010100
+ %10101000
+ %00000100
+ %01000001
+ %00001000
+end
+ 
+ if f=25 then player0:
+ %10001000
+ %00000001
+ %00010100
+ %00000001
+ %10100000
+ %00010100
+ %00000001
+ %10010100
+end
+
+ if f=30 then player0:
+ %10001001
+ %01010100
+ %00000010
+ %01000001
+ %10000010
+ %00100000
+ %01001010
+ %10010001
+end
+ 
+ if f=35 then player0:
+ %01010010
+ %00001000
+ %00000001
+ %10000010
+ %00000000
+ %01000000
+ %00000001
+ %01001000
+end
+
+ if f=40 then player0:
+ %01000010
+ %00000001
+ %10000000
+ %00000000
+ %00000000
+ %00000000
+ %00000000
+ %10000001
+end
+
+   goto explode1
+
+checklives
+   if u=0 then pfscore1=168:pfscore2=168			: rem 3 3
+   if u=1 then pfscore1=10:pfscore2=168 			: rem 2 3
+   if u=2 then pfscore1=4:pfscore2=168  			: rem 1 3
+   if u=3 then pfscore1=0:pfscore2=168  			: rem 0 3
+   if u=4 then pfscore1=0:pfscore2=10   			: rem 0 2
+   if u=5 then pfscore1=0:pfscore2=4                            : rem 0 0
+   if u>5 then pfscore1=0:pfscore2=0:pop:goto death bank3 
+   return
+
+clear1
+   AUDV0=0:AUDV1=0
+   q=0
+   ballx=0:bally=0
+   missile0height=2
+   missile1height=2
+   a=80  	: rem ball x pos
+   b=87  	: rem ball y pos
+   c=130	: rem missile 0 x pos
+   e=40 	: rem missile 1 x pos
+   f=0 		: rem used for audio sounds
+   j=0		: rem counter for sprite animation
+   m=3     	: rem
+   n=0		: rem counter to slow down falling bombs
+   t=0		: rem shield speed
+   v=100  	: rem player 1 x pos
+   w=3  	: rem player 1 y pos
+   x=35  	: rem player 0 x pos
+   y=13  	: rem player 0 y pos
+   z=0		: rem speed of laser movement
+
+clear2
+
+ ballheight=0
+
+ if u=0 then pfscore1=168:pfscore2=168			: rem 3 3
+ if u=1 then pfscore1=10:pfscore2=168 			: rem 2 3
+ if u=2 then pfscore1=4:pfscore2=168  			: rem 1 3
+ if u=3 then pfscore1=0:pfscore2=168  			: rem 0 3
+ if u=4 then pfscore1=0:pfscore2=10   			: rem 0 2
+ if u=5 then pfscore1=0:pfscore2=4   			: rem 0 1
+ if u>5 then pfscore1=0:pfscore2=0
+
+ ballx=a
+ bally=b
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ COLUP0=28
+ COLUP1=14
+
+ player0:
+  %11100000
+  %00100000
+  %11100000
+  %10000111
+  %11100100
+  %00000110
+  %11100100
+  %00100111
+  %11100000
+  %10000101
+  %11100110
+  %00000111
+  %11100101
+  %10000111
+  %11000000
+  %10000111
+  %11100010
+  %00000010
+  %10100111
+  %11000000
+  %11100100
+  %10100100
+  %11100110
+  %00000100
+  %10000111
+  %10000000
+  %11100000
+  %10100000
+  %11100000
+end
+
+ player0x=76:player0y=57
+
+
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ COLUBK=0
+
+ drawscreen
+ 
+   q=q+1
+   if q>80 then q=81
+ 
+   if joy0fire && q=81 then o=20:ballheight=68:return otherbank
+
+ goto clear2
+
+randomize
+
+   rem keep track of how many bombs you've defused 
+   t=t+1
+
+   rem ------------------------------------------------------------------
+   rem  randomize bomb location
+   rem ------------------------------------------------------------------
+200 n=rand:if n>215 then 200 
+   n=n/8:n=n+1
+   if n > 0  && n < 3    then j=27:o=19
+   if n > 2  && n < 5    then j=130:o=26
+   if n > 4  && n < 7   then j=41:o=46
+   if n > 6  && n < 9  then j=130:o=52
+   if n > 8  && n < 11  then j=55:o=19
+   if n > 10  && n < 13  then j=90:o=28
+   if n > 12  && n < 15  then j=115:o=19
+   if n > 14  && n < 17  then j=76:o=60
+
+   if n > 16  && n < 19  then j=27:o=72
+   if n > 18  && n < 21  then j=130:o=72
+   if n > 20  && n < 23  then j=85:o=60
+   if n > 22  && n < 25  then j=105:o=60
+   if n > 24  && n < 27  then j=50:o=35
+   if n > 28  && n < 31  then j=100:o=37
+   return
+
+levelup12
+ if switchreset then reboot
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup12b
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %11011110
+ %11011000
+ %11011000
+ %11011000
+ %11011110
+ %01000010
+ %01000010
+ %01011110
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=240:y=2:w=2:return otherbank
+
+ drawscreen
+ goto levelup12b
+
+
+titlescreen
+
+ s=36
+ k{7}=1
+
+titlescreen2
+
+ g=g+1
+ if g>2 then g=1
+
+ if s<36 then k{7}=1
+ if s>114 then k{7}=0
+
+ if k{7} then s=s+1
+ if !k{7} then s=s-1
+
+ rem if s<36 then s=114
+ rem if s>114 then s=36
+
+ missile0x=s:missile0y=77
+ missile0height=68
+
+ AUDV0=0
+
+ rem counter for falling bombs
+ if g=2 then l=l+1
+ if l>78 then l=18
+
+ COLUP0=66
+ if l<70 then COLUP1=8
+ if l>69 then COLUP1=28
+
+ playfield:
+ ....XXXXXXXXXXXXXXXXXXXXX.......
+ ....XXXXXXXXXXXXXXXXXXXXX.......
+ ....XX..........................
+ ....X.X.XXX.X...X.XX..XXX.......
+ ....XX..X.X.XX.XX.X.X.X.........
+ ....X.X.X.X.X.X.X.XX..XXX.......
+ ....X.X.X.X.X...X.X.X...X.......
+ ....XX..XXX.X...X.XX..XXX.......
+ ................X...............
+ ....XXXXXXXXXXXXXXXXXXXXXXX.X...
+ ....XXXXXXXXXXXXXXXXXXXXXXXXX...
+ ................X...............
+end
+
+ if joy0fire then drawscreen:goto begin bank1
+
+ NUSIZ1=$06
+ NUSIZ0=$25
+
+ player0:
+  %00001000
+  %00001000
+  %00011100
+  %00110110
+  %01100011
+  %01000001
+  %01000001
+  %00000000
+  %01000001
+  %01000001
+  %01100011
+  %01111111
+  %01100011
+  %00111110
+  %00011100
+  %00000000
+  %00100010
+  %01110111
+  %01111111
+  %01011101
+  %01001001
+  %01000001
+  %01000001
+  %00000000
+  %01000001
+  %01000001
+  %01100011
+  %01111111
+  %01100011
+  %00111110
+  %00011100
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %00000000
+  %11111111
+  %00000000
+  %11100000
+  %00100000
+  %11100000
+  %10000111
+  %11100100
+  %00000110
+  %11100100
+  %00100111
+  %11100000
+  %10000101
+  %11100110
+  %00000111
+  %11100101
+  %10000111
+  %11000000
+  %10000111
+  %11100010
+  %00000010
+  %10100111
+  %11000000
+  %11100100
+  %10100100
+  %11100110
+  %00000100
+  %10000111
+  %10000000
+  %11100000
+  %10100000
+  %11100000
+  %00000000
+  %11111111
+end
+
+ player0x=117:player0y=86
+
+ j=j+1
+
+ if j=30 then player1:
+  %00011000
+  %00101100
+  %00101100
+  %01011110
+  %01011110
+  %00101100
+  %00111100
+  %00011000
+  %00011000
+  %00101100
+end
+
+ if j=20 then player1:
+  %00011000
+  %00100100
+  %00100100
+  %01100110
+  %01111110
+  %00100100
+  %00111100
+  %00011000
+  %00011000
+  %01100110
+end
+
+ if j=10 then player1:
+  %00011000
+  %00110100
+  %00110100
+  %01111010
+  %01111010
+  %00110100
+  %00111100
+  %00011000
+  %00011000
+  %00110100
+end
+ rem make bomb explode when it gets to the bottom
+ if l>70 && l<78 then AUDF0=31:AUDC0=l:AUDV0=8: player1:
+  %10011001
+  %00110100
+  %00100100
+  %01100010
+  %11000011
+  %00100100
+  %00111100
+  %01011010
+  %10011001
+  %00100100
+end
+
+ if j>30 then j=0
+
+ player1x=38:player1y=l
+
+ drawscreen
+
+ goto titlescreen2
+
+one2
+ player0:
+ %00111000
+ %00111000
+ %00111000
+ %00111000
+ %00011000
+ %00011000
+ %00011000
+ %00011000
+end
+ return otherbank
+
+two2
+ player0:
+ %01111110
+ %01100000
+ %01100000
+ %01100000
+ %00111110
+ %00000010
+ %01000010
+ %01111110
+end
+ return otherbank
+
+three2
+ player0:
+ %01111110
+ %01000110
+ %00000110
+ %00000110
+ %00111110
+ %00000010
+ %01000010
+ %01111110
+end
+ return otherbank
+
+four2
+ player0:
+ %00001100
+ %00001100
+ %00001100
+ %01111110
+ %01000100
+ %01000100
+ %01000100
+ %00000100
+end
+ return otherbank
+
+five2
+ player0:
+ %01111110
+ %01000110
+ %00000110
+ %00000110
+ %01111100
+ %01000000
+ %01000000
+ %01111110
+end
+ return otherbank
+
+six2
+ player0:
+ %01111110
+ %01000110
+ %01000110
+ %01000110
+ %01111100
+ %01000000
+ %01000010
+ %01111110
+end
+ return otherbank
+
+seven2
+ player0:
+ %00001100
+ %00001100
+ %00001100
+ %00001100
+ %00000100
+ %00000010
+ %01000010
+ %01111110
+end
+ return otherbank
+
+eight2
+ player0:
+ %01111110
+ %01000110
+ %01000110
+ %01000010
+ %01111110
+ %01000010
+ %01000010
+ %01111110
+end
+ return otherbank
+
+nine2
+ player0:
+ %00000110
+ %00000110
+ %00000110
+ %00000010
+ %01111110
+ %01000010
+ %01000010
+ %01111110
+end
+ return otherbank
+
+ten2
+ player0:
+ %11011110
+ %11010110
+ %11010110
+ %11010110
+ %01010010
+ %01010010
+ %01010010
+ %01011110
+end
+ return otherbank
+
+eleven2
+ player0:
+ %01101100
+ %01101100
+ %01101100
+ %01101100
+ %00100100
+ %00100100
+ %00100100
+ %00100100
+end
+ return otherbank
+
+twelve2
+ player0:
+ %11011110
+ %11011000
+ %11011000
+ %11011000
+ %11011110
+ %01000010
+ %01000010
+ %01011110
+end
+ return otherbank
+
+ rem ---------------------------
+
+ bank 3
+
+death
+ ballx=0:bally=0
+ q=0
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+death1
+ m=0
+ COLUP1=28
+ player1:
+ %00000000
+end
+ player0:
+ %00000000
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ drawscreen
+death2
+ COLUP0=238
+ if m<101 then m=m+1
+
+ rem AUDF0=31:AUDC0=m:AUDV0=12
+ AUDF1=29:AUDC1=m:AUDV1=9
+
+ if m=101 then AUDV0=0:AUDV1=0
+
+ if m=101 then COLUP1=28:player1:
+        %01000100
+        %01001000
+        %01111100
+        %01000100
+        %01111100
+        %00000000
+        %01111100
+        %01000000
+        %01111100
+        %01000000
+        %01111100
+        %00000000
+        %00111000
+        %01000100
+        %01000100
+        %01000100
+        %01000100
+        %00000000
+        %01111100
+        %01000100
+        %01000100
+        %01000100
+        %01111100
+        %00000000
+        %00000000
+        %00000000
+        %01111100
+        %01000000
+        %01111100
+        %01000000
+        %01111100
+        %00000000
+        %01000100
+        %01000100
+        %01010100
+        %01010100
+        %01101100
+        %00000000
+        %01000100
+        %01000100
+        %01111100
+        %01000100
+        %01111100
+        %00000000
+        %01111100
+        %01000100
+        %01001100
+        %01000000
+        %01111100
+end
+
+ if m=10 then COLUBK=62:gosub crumble1
+ if m=20 then COLUBK=28:gosub crumble2
+ if m=30 then COLUBK=64:gosub crumble3
+ if m=40 then COLUBK=68:gosub crumble4
+ if m=50 then COLUBK=28:gosub crumble5
+ if m=60 then COLUBK=62:gosub crumble6
+ if m=70 then COLUBK=64:gosub crumble7
+ if m=80 then COLUBK=68:gosub crumble8
+ if m=90 then COLUBK=28:gosub crumble9
+ if m=100 then COLUBK=62:gosub crumble10
+
+ if m>100 then COLUBK=0:m=101
+
+ rem ----------------------------------------
+ rem put skill level used on game over screen
+ 
+ rem n=n+1
+ rem if n>2 then n=0
+
+ if l=1 && m=101 then gosub skill1b
+ if l=2 && m=101 then gosub skill2b
+ if l=3 && m=101 then gosub skill3b
+
+ rem if n=2 && m=101 && r=1 then gosub one2 bank2
+ rem  if n=2 && m=101 && r=2 then gosub two2 bank2
+ rem  if n=2 && m=101 && r=3 then gosub three2 bank2
+ rem   if n=2 && m=101 && r=4 then gosub four2 bank2
+ rem   if n=2 && m=101 && r=5 then gosub five2 bank2
+ rem   if n=2 && m=101 && r=6 then gosub six2 bank2
+ rem   if n=2 && m=101 && r=7 then gosub seven2 bank2
+ rem   if n=2 && m=101 && r=8 then gosub eight2 bank2
+ rem   if n=2 && m=101 && r=9 then gosub nine2 bank2
+ rem   if n=2 && m=101 && r=10 then gosub ten2 bank2
+ rem   if n=2 && m=101 && r=11 then gosub eleven2 bank2
+ rem   if n=2 && m=101 && r=12 then gosub twelve2 bank2
+
+ if m=101 then player0x=38:player0y=70
+ rem   if n=2 && m=101 then player0x=120:player0y=70
+
+ NUSIZ1=$30
+ missile1height=8
+ if m=101 && i=1 then missile1x=121:missile1y=68
+
+ player1x=78:player1y=68
+ 
+ if switchreset then goto optionsrestart bank4
+
+ q=q+1
+ if q>250 then q=250
+
+ if q=250 && joy0fire then goto optionsrestart bank4
+
+ drawscreen
+ goto death2
+
+skill1b
+ player0:
+ %00000000
+ %00000000
+ %01000000
+ %01000000
+ %11100000
+ %10100000
+ %10100000
+ %00000000
+ %11100000
+ %00100000
+ %11100000
+ %10000000
+ %11100000
+ %00000000
+ %10100000
+ %10100000
+ %11100000
+ %10100000
+ %11100000
+ %00000000
+ %11100000
+ %10000000
+ %11000000
+ %10000000
+ %11100000
+ %00000000
+end
+ return thisbank
+
+skill2b
+ player0:
+ %00000000
+ %11100000
+ %10000000
+ %11000000
+ %10000000
+ %11100000
+ %00000000
+ %11100000
+ %10100000
+ %10100000
+ %10000000
+ %11100000
+ %00000000
+ %10100000
+ %10100000
+ %11100000
+ %10100000
+ %11100000
+ %00000000
+ %10100000
+ %11000000
+ %11100000
+ %10100000
+ %11100000
+ %00000000
+ %11100000
+ %10000000
+ %11000000
+ %10000000
+ %11100000
+ %00000000
+ %01000000
+ %10100000
+ %10100000
+ %10100000
+ %10100000
+ %00000000
+ %10100000
+ %10100000
+ %11100000
+ %10100000
+ %11100000
+
+ %00000000
+end
+ return thisbank
+
+skill3b
+ player0:
+ %00000000
+ %00000000
+ %11000000
+ %10100000
+ %10100000
+ %10100000
+ %11000000
+ %00000000
+ %10100000
+ %11000000
+ %11100000
+ %10100000
+ %11100000
+ %00000000
+ %10100000
+ %10100000
+ %11100000
+ %10100000
+ %11100000
+ %00000000
+ %10100000
+ %10100000
+ %11100000
+ %10100000
+ %10100000
+ %00000000
+end
+ return thisbank
+
+crumble1
+ playfield:
+ ................................
+ ...............................
+ ..XX.................XXX........
+ ..XXXX...X.X........XXXXXX.XX...
+ ..X..X..XXXXXX......XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ return thisbank
+
+crumble2
+ playfield:
+ ................................
+ ................................
+ .X............X........X.....X..
+ ....XX.....X.....X....XXXX......
+ .....X...XXXXX......XXXXXX.X....
+ .XXXXXX.X.X.X.X...X.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ return thisbank
+
+crumble3
+ playfield:
+ ................................
+ ................................
+ .X.......X.....X............X...
+ .................X....XX........
+ .....X.....XX........XX.X.......
+ ...XXXX.X.X.X.......XXXXXX..XX..
+ .X....X.XXXXXXX...X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ return thisbank
+
+crumble4
+ playfield:
+ ................................
+ ................................
+ X.......X............X.........X
+ ..X...........X.................
+ ........................X....X..
+ ...XX...X.X.........XXXXX.......
+ .X....X.XXXXX.....X.XXXXXX.X....
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ return thisbank
+
+crumble5
+ playfield:
+ ................................
+ ................................
+ ................................
+ ..............................X.
+ ..X.............X...............
+ ......................XXX.......
+ ......X...XXX.......XXXXXX......
+ .XXXXXX.XXX.X...XXX.XXXXXX.XXX..
+ .X..XXX.XXXXXXX.XXX.XXXXXX.XXXX.
+ .XXXXXX.XXX.XXX.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ return thisbank
+
+crumble6
+ playfield:
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ ......................X.........
+ ...................XXXXX........
+ ...XXXX...X.X....XX.XXXXXX..XX..
+ .XXXXXX..XXXXXX..XX.XXXXXX.XXXX.
+ .XXXXXX.XXXXXXX.XXX.X..XXXXXXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ return thisbank
+
+crumble7
+ playfield:
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ .....................XXX........
+ ...XX.....X.X....XX.XXXXXX...X..
+ .XXXXXX..XXXXXX..XX.XXXXXX.XXXX.
+ .XXXXXXXXXXXXXX.XXXXXX.XXXXXXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ return thisbank
+
+crumble8
+ playfield:
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ ......................XX........
+ ....X............XX..XXXXX......
+ ..XXXXX..XXXXXX..XX.XXXXXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ return thisbank
+
+crumble9
+ playfield:
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ ....X............XX..XXXXX......
+ ..XXXXX..XXXXXX..XX.XXXXXXXXXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ return thisbank
+
+crumble10
+ playfield:
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ ................................
+ ......................XXXX......
+ ..XXXXXX.XXXXXX..XX.XXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ return thisbank
+
+levelup0
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ q=0
+ ballx=0:bally=0
+levelup0b
+ f=f+1
+ if f>250 then f=1
+ COLUP0=f
+ AUDV1=0
+ AUDV0=0
+ NUSIZ0=$05
+ COLUP1=0
+ player0:
+ %00000100
+ %00000100
+ %00000100
+ %00001110
+ %00001010
+ %00001010
+ %00000000
+ %00001100
+ %00001010
+ %00001010
+ %00001010
+ %00001100
+ %00000000
+ %00001010
+ %00001010
+ %00001110
+ %00001010
+ %00001110
+ %00000000
+ %01001110
+ %01001000
+ %01001100
+ %01001000
+ %11101110
+ %00000000
+ %11101010
+ %10001100
+ %11001110
+ %10001010
+ %11101110
+ %00000000
+ %11100000
+ %10100000
+ %10100000
+ %10000000
+ %11100000
+end
+ playfield:
+ ................................
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=74:player0y=60
+ q=q+1
+ if q>70 then q=70
+
+ if q=70 && joy0fire then p=1:y=2:w=2:goto startthegame
+ if switchreset then reboot
+ drawscreen
+ goto levelup0b
+
+startthegame
+ player0:
+ %0000000
+end
+ player1:
+ %0000000
+end
+ ballx=0:bally=0
+ drawscreen
+ goto levelup0bret
+
+
+levelup0bret
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+ drawscreen
+ return otherbank
+
+levelup1
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup1b
+ if switchreset then reboot
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %01111110
+ %01100000
+ %01100000
+ %01100000
+ %00111110
+ %00000010
+ %01000010
+ %01111110
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=21:y=2:w=2:return otherbank
+ drawscreen
+ goto levelup1b
+
+levelup2
+ if switchreset then reboot
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup2b
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %01111110
+ %01000110
+ %00000110
+ %00000110
+ %00111110
+ %00000010
+ %01000010
+ %01111110
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=41:y=2:w=2:return otherbank
+ drawscreen
+ goto levelup2b
+
+levelup3
+ if switchreset then reboot
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup3b
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %00001100
+ %00001100
+ %00001100
+ %01111110
+ %01000100
+ %01000100
+ %01000100
+ %00000100
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=61:y=2:w=2:return otherbank
+ drawscreen
+ goto levelup3b
+
+levelup4
+ if switchreset then reboot
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup4b
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %01111110
+ %01000110
+ %00000110
+ %00000110
+ %01111100
+ %01000000
+ %01000000
+ %01111110
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=81:y=2:w=2:return otherbank
+ drawscreen
+ goto levelup4b
+
+levelup5
+ if switchreset then reboot
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup5b
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %01111110
+ %01000110
+ %01000110
+ %01000110
+ %01111100
+ %01000000
+ %01000010
+ %01111110
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=101:y=2:w=2:return otherbank
+ drawscreen
+ goto levelup5b
+
+levelup6
+ if switchreset then reboot
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup6b
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %00001100
+ %00001100
+ %00001100
+ %00001100
+ %00000100
+ %00000010
+ %01000010
+ %01111110
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=121:y=2:w=2:return otherbank
+ drawscreen
+ goto levelup6b
+
+levelup7
+ if switchreset then reboot
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup7b
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %01111110
+ %01000110
+ %01000110
+ %01000010
+ %01111110
+ %01000010
+ %01000010
+ %01111110
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=141:y=2:w=2:return otherbank
+ drawscreen
+ goto levelup7b
+
+levelup8
+ if switchreset then reboot
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup8b
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %00000110
+ %00000110
+ %00000110
+ %00000010
+ %01111110
+ %01000010
+ %01000010
+ %01111110
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=161:y=2:w=2:return otherbank
+ drawscreen
+ goto levelup8b
+
+levelup9
+ if switchreset then reboot
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup9b
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %11011110
+ %11010110
+ %11010110
+ %11010110
+ %01010010
+ %01010010
+ %01010010
+ %01011110
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=181:y=2:w=2:return otherbank
+ drawscreen
+ goto levelup9b
+
+levelup10
+ if switchreset then reboot
+ AUDV1=0:AUDV0=0:o=o+10
+ missile0x=0:missile0y=0
+ missile1x=0:missile1y=0
+ ballx=0:bally=0
+ if u>0 then u=u-1
+ q=0
+levelup10b
+ NUSIZ1=$05
+ COLUP1=28:COLUP0=28
+ player0:
+ %01100110
+ %01100110
+ %01100110
+ %01100110
+ %00100010
+ %00100010
+ %00100010
+ %00100010
+end
+ player1:
+ %11010011
+ %10010010
+ %10101010
+ %10101010
+ %10101010
+ %10101010
+end
+ playfield:
+ ................................
+ ................................
+ ..XXXX..............XXXXXX......
+ ..XXXX...X.X.X......XXXXXX.XXXX.
+ ..X..X..XXXXXXX.....XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.XXXXXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.XXXXXX.XXXX.
+ .X....X.XXXXXXX.X.X.X..XXX.X..X.
+ .XXXXXX.X.X.X.X.XXX.X..XXX.XXXX.
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+end
+
+ player0x=80:player0y=50
+ player1x=75:player1y=40
+ q=q+1
+ if q>100 then q=100
+
+ if q=100 && joy0fire then p=201:y=2:w=2:return otherbank
+ drawscreen
+ goto levelup10b
+
+
+ bank 4
+
+optionsrestart
+ score=000000
+ m=44
+ t=1
+ z=0
+ q=0  : rem reset pause timer for joystick button
+ missile0height=8
+ d=g  : rem recall last state of skill level variable
+ rem goto last level number selected, saved as S from the last time
+
+ rem on s gosub one two three four five six seven eight nine ten eleven twelve 
+
+ if s=1 then gosub one
+ if s=2 then gosub two
+ if s=3 then gosub three
+ if s=4 then gosub four
+ if s=5 then gosub five
+ if s=6 then gosub six
+ if s=7 then gosub seven
+ if s=8 then gosub eight
+ if s=9 then gosub nine
+ if s=10 then gosub ten
+ if s=11 then gosub eleven
+ if s=12 then gosub twelve
+ rem check last state of shield activation
+ if i=1 then missile0x=84:missile0y=67
+ if i=0 then missile0x=0:missile0y=0
+
+ pfscore1=0
+ pfscore2=0
+ scorecolor=0
+ k{3}=1
+ goto options1b
+
+options
+
+ z=0
+ score = 000000
+ missile0height=8
+ r=1
+ q=0
+ i=1
+ j=0
+ d=3
+ m=44
+ l=3
+ u=0
+ player1:
+ %00111000
+ %00111000
+ %00111000
+ %00111000
+ %00011000
+ %00011000
+ %00011000
+ %00011000
+end
+ missile0x=84:missile0y=67
+ pfscore1=0
+ pfscore2=0
+ pfscorecolor=144
+ scorecolor=0
+
+options1b
+ w=0
+ y=0
+ u=0
+ if switchreset then reboot
+ if k{3} then k{3}=0:q=0
+ NUSIZ1=$30
+ NUSIZ0=$37
+ COLUP1=28
+ COLUP0=28
+ player0:
+ %00000000
+ %00000000
+ %11100111
+ %00100100
+ %11100100
+ %10000100
+ %11100100
+ %00000000
+ %11000111
+ %10100100
+ %10100110
+ %10100100
+ %11000111
+ %00000000
+ %11100010
+ %10000101
+ %10000101
+ %10000101
+ %10000101
+ %00000000
+ %11100111
+ %10000100
+ %11000110
+ %10000100
+ %11100111
+ %00000000
+ %11100111
+ %01000100
+ %01000100
+ %01000100
+ %11100100
+ %00000000
+ %10100000
+ %10100000
+ %11100000
+ %10100000
+ %10100000
+ %00000000
+ %11100000
+ %00100000
+ %11100000
+ %10000000
+ %11100000
+ %00000000
+ %00000000
+end
+
+ playfield:
+ ......XXX..XXX..XXX..XXX........
+ ......X.X..XXX..XXX..XXX........
+ .XXXXXXXXXXXXXXXXXXXXXXXXXXXX...
+ ................................
+ .XXX.XXX.XXX.XXX.XXX.X..X.XXX...
+ .X.X.X.X..X...X..X.X.XX.X.X.....
+ .X.X.XXX..X...X..X.X.XX.X.XXX...
+ .XXX.X....X..XXX.XXX.X.XX...X...
+ ............................X...
+ .XXXXXXXXXXXXXXXXXXXXXXXXXXXX...
+ ......XXX..XXX..XXX..XXX........
+end
+
+ missile1height=4
+ missile1x=m:missile1y=6
+
+ if joy0left && t=1 then m=m-20
+ if joy0right && t=1 then m=m+20
+ if m<44 then m=44
+ if m>104 then m=104
+
+ j=j+1
+ if j>2 then j=1
+
+ if j=1 then gosub mainsprite
+
+ if d>0 then skipthis9
+ if j=2 && l=3 then gosub skill3:l=3
+ if j=2 && l=2 then gosub skill2:l=2
+ if j=2 && l=1 then gosub skill1:l=1
+skipthis9
+
+ if m=64 && l=1 && t=1 && joy0down then d=3
+ if m=64 && l=2 && t=1 && joy0down then d=1
+ if m=64 && l=3 && t=1 && joy0down then d=2
+ if m=64 && l=1 && t=1 && joy0up then d=2
+ if m=64 && l=2 && t=1 && joy0up then d=3
+ if m=64 && l=3 && t=1 && joy0up then d=1
+
+ if j=2 && d=1 then gosub skill1:l=1
+ if j=2 && d=2 then gosub skill2:l=2
+ if j=2 && d=3 then gosub skill3:l=3
+
+ if j=1 then player0x=80:player0y=58
+ if j=2 then player0x=40:player0y=58
+
+ player1x=104:player1y=67
+
+ if r=13 then r=1
+ if r=0 then r=12
+
+ t=t+1
+ if t>10 then t=1
+
+ if joy0up && t=1 && m=104 then r=r+1
+ if joy0down && t=1 && m=104 then r=r-1
+
+ if r=1 then gosub one
+ if r=2 then gosub two
+ if r=3 then gosub three
+ if r=4 then gosub four
+ if r=5 then gosub five
+ if r=6 then gosub six
+ if r=7 then gosub seven
+ if r=8 then gosub eight
+ if r=9 then gosub nine
+ if r=10 then gosub ten
+ if r=11 then gosub eleven
+ if r=12 then gosub twelve
+
+ if joy0up && m=84 then i=1:missile0x=84:missile0y=67
+ if joy0down && m=84 then i=0:missile0x=0:missile0y=0
+
+ if joy0up && m=44 then k{4}=0
+ if joy0down && m=44 then k{4}=1
+
+ ballx=46
+ bally=77
+
+ if !k{4} then ballheight=69: goto skipbl
+ f=f+1
+ if f<20 then f=20
+ if f>68 then f=1
+ ballheight=f
+skipbl
+
+ q=q+1
+ if q>69 then q=70
+
+ rem start game, save starting skill level to S variable to go back to that when game is over
+ if q=70 && joy0fire then goto gamestartreset bank1
+
+ drawscreen
+ goto options1b
+
+one
+ player1:
+ %00111000
+ %00111000
+ %00111000
+ %00111000
+ %00011000
+ %00011000
+ %00011000
+ %00011000
+end
+ p=0
+ return thisbank
+
+two
+ player1:
+ %01111110
+ %01100000
+ %01100000
+ %01100000
+ %00111110
+ %00000010
+ %01000010
+ %01111110
+end
+ p=20
+ return thisbank
+
+three
+ player1:
+ %01111110
+ %01000110
+ %00000110
+ %00000110
+ %00111110
+ %00000010
+ %01000010
+ %01111110
+end
+ p=40
+ return thisbank
+
+four
+ player1:
+ %00001100
+ %00001100
+ %00001100
+ %01111110
+ %01000100
+ %01000100
+ %01000100
+ %00000100
+end
+ p=60
+ return thisbank
+
+five
+ player1:
+ %01111110
+ %01000110
+ %00000110
+ %00000110
+ %01111100
+ %01000000
+ %01000000
+ %01111110
+end
+ p=80
+ return thisbank
+
+six
+ player1:
+ %01111110
+ %01000110
+ %01000110
+ %01000110
+ %01111100
+ %01000000
+ %01000010
+ %01111110
+end
+ p=100
+ return thisbank
+
+seven
+ player1:
+ %00001100
+ %00001100
+ %00001100
+ %00001100
+ %00000100
+ %00000010
+ %01000010
+ %01111110
+end
+ p=120
+ return thisbank
+
+eight
+ player1:
+ %01111110
+ %01000110
+ %01000110
+ %01000010
+ %01111110
+ %01000010
+ %01000010
+ %01111110
+end
+ p=140
+ return thisbank
+
+nine
+ player1:
+ %00000110
+ %00000110
+ %00000110
+ %00000010
+ %01111110
+ %01000010
+ %01000010
+ %01111110
+end
+ p=160
+ return thisbank
+
+ten
+ player1:
+ %11011110
+ %11010110
+ %11010110
+ %11010110
+ %01010010
+ %01010010
+ %01010010
+ %01011110
+end
+ p=180
+ return thisbank
+
+eleven
+ player1:
+ %01101100
+ %01101100
+ %01101100
+ %01101100
+ %00100100
+ %00100100
+ %00100100
+ %00100100
+end
+ p=200
+ return thisbank
+
+twelve
+ player1:
+ %11011110
+ %11011000
+ %11011000
+ %11011000
+ %11011110
+ %01000010
+ %01000010
+ %01011110
+end
+ p=239
+ return thisbank
+
+skill1
+ player0:
+ %10100010
+ %11000010
+ %11100111
+ %10100101
+ %11100101
+ %00000000
+ %11100111
+ %10000001
+ %11000111
+ %10000100
+ %11100111
+ %00000000
+ %11100101
+ %00100101
+ %11100111
+ %10000101
+ %11100111
+ %00000000
+ %10100111
+ %10100100
+ %11100110
+ %10100100
+ %11100111
+ %00000000
+ %11100000
+ %10000000
+ %10000000
+ %10000000
+ %10000000
+end
+ return thisbank
+
+skill2
+ player0:
+ %10100111
+ %11000100
+ %11100110
+ %10100100
+ %11100111
+ %00000000
+ %11100111
+ %10000101
+ %11000101
+ %10000100
+ %11100111
+ %00000000
+ %11100101
+ %00100101
+ %11100111
+ %10000101
+ %11100111
+ %00000000
+ %10100101
+ %10100110
+ %11100111
+ %10100101
+ %11100111
+ %00000000
+ %11100111
+ %10000100
+ %10000110
+ %10000100
+ %10000111
+ %00000000
+ %00000010
+ %00000101
+ %00000101
+ %00000101
+ %00000101
+ %00000000
+ %00000101
+ %00000101
+ %00000111
+ %00000101
+ %00000111
+
+ %00000000
+end
+ return thisbank
+
+skill3
+ player0:
+ %10100110
+ %11000101
+ %11100101
+ %10100101
+ %11100110
+ %00000000
+ %11100101
+ %10000110
+ %11000111
+ %10000101
+ %11100111
+ %00000000
+ %11100101
+ %00100101
+ %11100111
+ %10000101
+ %11100111
+ %00000000
+ %10100101
+ %10100101
+ %11100111
+ %10100101
+ %11100101
+ %00000000
+ %11100000
+ %10000000
+ %10000000
+ %10000000
+ %10000000
+end
+ return thisbank
+
+mainsprite
+ player0:
+ %00000000
+ %00000000
+ %11100111
+ %00100100
+ %11100100
+ %10000100
+ %11100100
+ %00000000
+ %11000111
+ %10100100
+ %10100110
+ %10100100
+ %11000111
+ %00000000
+ %11100010
+ %10000101
+ %10000101
+ %10000101
+ %10000101
+ %00000000
+ %11100111
+ %10000100
+ %11000110
+ %10000100
+ %11100111
+ %00000000
+ %11100111
+ %01000100
+ %01000100
+ %01000100
+ %11100100
+ %00000000
+ %10100000
+ %10100000
+ %11100000
+ %10100000
+ %10100000
+ %00000000
+ %11100000
+ %00100000
+ %11100000
+ %10000000
+ %11100000
+ %00000000
+ %00000000
+end
+ return thisbank
+
+forreference
+ rem a=80  		: rem ball x pos
+ rem  b=87  		: rem ball y pos
+ rem  c=130		: rem missile 0 x pos
+ rem  d=0  		: rem smartbomb
+ rem  e=40 		: rem missile 1 x pos
+ rem  f=0 		: rem smartbomb
+ rem  g=0		: rem random number generator
+ rem  h=0		: rem speed variable
+ rem  i=0		: rem shields on/off
+ rem  j=0		: rem counter for sprite animation
+ rem  k=0		: rem l/r movement for shield
+ rem  l=0		: rem l/r movement for shield
+ rem  m=3     		: rem counter in death sequence, counter for smart bombs.
+ rem  n=0		: rem counter to slow down falling bombs
+ rem  o=10		: rem color change for bombs, changes each level
+ rem  p=0		: rem counter for slowing down bomb speed
+ rem  q=0		: rem pause timer for hitting the joystick button between levels, about 1.5 seconds.
+ rem  r=0		: rem level selection on options screen
+ rem  s=0		: rem counter for clearing playfield after laser shot
+ rem  t=0		: rem shield speed
+ rem  u=0		: rem "lose a life" counter.  Incremented when a bomb hits the city.
+ rem  v=100  		: rem player 1 x pos
+ rem  w=3  		: rem player 1 y pos
+ rem  x=35  		: rem player 0 x pos
+ rem  y=3  		: rem player 0 y pos
+ rem  z=0		: rem speed of laser movement
+ 
